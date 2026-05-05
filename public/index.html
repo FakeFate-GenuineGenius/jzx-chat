@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<script src="http://电脑IP:3000/socket.io/socket.io.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>两人聊天 - 自定义头像</title>
+<style>
+body { margin:0; font-family:"微软雅黑",Arial,sans-serif; background:#f0f2f5; }
+#setup { padding:20px; background:#fff; display:flex; flex-direction:column; align-items:center; height:100vh; justify-content:center; }
+#setup input { padding:8px; font-size:16px; margin-bottom:10px; width:200px; }
+#avatar-options img { width:50px; height:50px; border-radius:50%; margin:5px; cursor:pointer; border:2px solid transparent; }
+#avatar-options img.selected { border-color:#1e90ff; }
+#startBtn { padding:8px 16px; font-size:16px; cursor:pointer; }
+
+.chat-container { display:none; flex-direction:column; height:100vh; }
+#online-status { padding:10px; background:#0078ff; color:white; font-size:14px; text-align:center; }
+#messages { flex:1; padding:20px; overflow-y:auto; }
+.message { display:flex; margin-bottom:15px; align-items:flex-start; }
+.message.other { flex-direction:row; }
+.message.self { flex-direction:row-reverse; }
+.message img { width:40px; height:40px; border-radius:50%; }
+.message-info { display:flex; font-size:12px; color:#555; margin-bottom:2px; }
+.message-info span { margin-right:5px; }
+.bubble { max-width:90%; padding:10px 15px; border-radius:15px; word-wrap:break-word; position:relative; }
+.bubble.self { background:#1e90ff; color:white; border-bottom-right-radius:0; }
+.bubble.other { background:#fff; color:black; border-bottom-left-radius:0; }
+.input-box { display:flex; padding:10px; background:#f0f0f0; border-top:1px solid #ccc; }
+#messageInput { flex:1; padding:10px; font-size:16px; border-radius:5px; border:1px solid #ccc; outline:none; }
+#sendBtn { padding:10px 20px; margin-left:10px; background:#1e90ff; color:white; border:none; border-radius:5px; cursor:pointer; font-size:16px; }
+#sendBtn:hover { background:#187bcd; }
+</style>
+</head>
+<body>
+
+<!-- 设置昵称和选择头像 -->
+<div id="setup">
+    <h2>输入你的昵称</h2>
+    <input id="usernameInput" placeholder="昵称" />
+    <h2>选择头像</h2>
+    <div id="avatar-options">
+        <img src="https://i.pravatar.cc/50?img=1">
+        <img src="https://i.pravatar.cc/50?img=2">
+        <img src="https://i.pravatar.cc/50?img=3">
+        <img src="https://i.pravatar.cc/50?img=4">
+    </div>
+    <button id="startBtn">开始聊天</button>
+</div>
+
+<!-- 聊天界面 -->
+<div class="chat-container" id="chatContainer">
+    <div id="online-status">等待另一位用户上线...</div>
+    <div id="messages"></div>
+    <div class="input-box">
+        <input id="messageInput" placeholder="输入消息..." />
+        <button id="sendBtn">发送</button>
+    </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+let myUsername = "";
+let myAvatar = "";
+let roomUsers = [];
+const socket = io();
+
+const setupDiv = document.getElementById("setup");
+const chatContainer = document.getElementById("chatContainer");
+const usernameInput = document.getElementById("usernameInput");
+const avatarOptions = document.getElementById("avatar-options").getElementsByTagName("img");
+let selectedAvatar = avatarOptions[0].src;
+const startBtn = document.getElementById("startBtn");
+
+for(let img of avatarOptions){
+    img.addEventListener("click", ()=>{
+        selectedAvatar = img.src;
+        for(let i of avatarOptions) i.classList.remove("selected");
+        img.classList.add("selected");
+    });
+}
+
+startBtn.addEventListener("click", ()=>{
+    const name = usernameInput.value.trim();
+    if(!name){ alert("请输入昵称"); return; }
+    myUsername = name;
+    myAvatar = selectedAvatar;
+
+    setupDiv.style.display = "none";
+    chatContainer.style.display = "flex";
+
+    socket.emit("join", {user:myUsername}); // 通知服务器加入
+});
+
+const messages = document.getElementById("messages");
+const input = document.getElementById("messageInput");
+const btn = document.getElementById("sendBtn");
+
+function getTimeStr(){ 
+    const d = new Date();
+    return d.getHours().toString().padStart(2,'0')+":"+d.getMinutes().toString().padStart(2,'0'); 
+}
+
+function addMessage(msgObj){
+    const div=document.createElement("div");
+    div.classList.add("message");
+    div.classList.add(msgObj.user===myUsername?"self":"other");
+
+    const avatar=document.createElement("img");
+    avatar.src=msgObj.user===myUsername?myAvatar:msgObj.avatar;
+
+    const info=document.createElement("div");
+    info.classList.add("message-info");
+    const nameSpan=document.createElement("span");
+    nameSpan.textContent=msgObj.user;
+    const timeSpan=document.createElement("span");
+    timeSpan.textContent=msgObj.time;
+    info.appendChild(nameSpan);
+    info.appendChild(timeSpan);
+
+    const bubble=document.createElement("div");
+    bubble.classList.add("bubble");
+    bubble.classList.add(msgObj.user===myUsername?"self":"other");
+    bubble.textContent=msgObj.message;
+
+    const wrapper=document.createElement("div");
+    wrapper.appendChild(info);
+    wrapper.appendChild(bubble);
+
+    div.appendChild(avatar);
+    div.appendChild(wrapper);
+
+    messages.appendChild(div);
+    messages.scrollTop=messages.scrollHeight;
+}
+
+btn.addEventListener("click", ()=>{
+    const msg=input.value.trim();
+    if(!msg) return;
+    const msgObj={id:Date.now()+Math.random(), user:myUsername, message:msg, avatar:myAvatar, time:getTimeStr()};
+    socket.emit("chat message", msgObj);
+    input.value="";
+    addMessage(msgObj);
+});
+
+input.addEventListener("keydown",(e)=>{ if(e.key==="Enter") btn.click(); });
+
+socket.on("chat message",(msgObj)=>{ if(msgObj.user===myUsername) return; addMessage(msgObj); });
+
+// 在线状态更新
+socket.on("update users",(users)=>{
+    roomUsers = users;
+    if(users.length===2){
+        const other = users.find(u=>u.user!==myUsername);
+        document.getElementById("online-status").textContent = other ? `${other.user} 已上线` : "等待另一位用户上线...";
+    } else {
+        document.getElementById("online-status").textContent = "等待另一位用户上线...";
+    }
+});
+
+socket.on("full",(msg)=>{ alert(msg); });
+</script>
+</body>
+</html>
