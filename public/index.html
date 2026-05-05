@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-<script src="http://电脑IP:3000/socket.io/socket.io.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>两人聊天 - 自定义头像</title>
@@ -14,7 +13,11 @@ body { margin:0; font-family:"微软雅黑",Arial,sans-serif; background:#f0f2f5
 #startBtn { padding:8px 16px; font-size:16px; cursor:pointer; }
 
 .chat-container { display:none; flex-direction:column; height:100vh; }
-#online-status { padding:10px; background:#0078ff; color:white; font-size:14px; text-align:center; }
+#online-status { padding:10px 12px; background:#0078ff; color:white; font-size:14px; text-align:center; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+#statusMeta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+#roomBadge { padding:4px 8px; border-radius:999px; background:rgba(255,255,255,0.18); font-size:12px; }
+#exitBtn { padding:7px 12px; background:rgba(255,255,255,0.18); color:white; border:none; border-radius:999px; cursor:pointer; font-size:13px; }
+#exitBtn:hover { background:rgba(255,255,255,0.28); }
 #messages { flex:1; padding:20px; overflow-y:auto; }
 .message { display:flex; margin-bottom:15px; align-items:flex-start; }
 .message.other { flex-direction:row; }
@@ -37,6 +40,8 @@ body { margin:0; font-family:"微软雅黑",Arial,sans-serif; background:#f0f2f5
 <div id="setup">
     <h2>输入你的昵称</h2>
     <input id="usernameInput" placeholder="昵称" />
+    <h2>房间密码</h2>
+    <input id="roomCodeInput" placeholder="留空自动创建随机房间" />
     <h2>选择头像</h2>
     <div id="avatar-options">
         <img src="https://i.pravatar.cc/50?img=1">
@@ -49,7 +54,13 @@ body { margin:0; font-family:"微软雅黑",Arial,sans-serif; background:#f0f2f5
 
 <!-- 聊天界面 -->
 <div class="chat-container" id="chatContainer">
-    <div id="online-status">等待另一位用户上线...</div>
+    <div id="online-status">
+        <span id="statusText">等待另一位用户上线...</span>
+        <div id="statusMeta">
+            <span id="roomBadge">房间：-</span>
+            <button id="exitBtn" type="button">主动退出</button>
+        </div>
+    </div>
     <div id="messages"></div>
     <div class="input-box">
         <input id="messageInput" placeholder="输入消息..." />
@@ -59,24 +70,143 @@ body { margin:0; font-family:"微软雅黑",Arial,sans-serif; background:#f0f2f5
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
+const STORAGE_KEY = "jzx-chat-profile";
 let myUsername = "";
 let myAvatar = "";
+let mySessionId = "";
+let myRoomCode = "";
 let roomUsers = [];
+let hasJoinedRoom = false;
 const socket = io();
 
 const setupDiv = document.getElementById("setup");
 const chatContainer = document.getElementById("chatContainer");
 const usernameInput = document.getElementById("usernameInput");
+const roomCodeInput = document.getElementById("roomCodeInput");
 const avatarOptions = document.getElementById("avatar-options").getElementsByTagName("img");
 let selectedAvatar = avatarOptions[0].src;
 const startBtn = document.getElementById("startBtn");
+const statusText = document.getElementById("statusText");
+const roomBadge = document.getElementById("roomBadge");
+const exitBtn = document.getElementById("exitBtn");
+
+function createSessionId(){
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return window.crypto.randomUUID();
+    }
+    return `session-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function loadProfile(){
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch (error) {
+        return null;
+    }
+}
+
+function saveProfile(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        user: myUsername,
+        avatar: myAvatar,
+        sessionId: mySessionId,
+        roomCode: myRoomCode,
+    }));
+}
+
+function clearProfile(){
+    localStorage.removeItem(STORAGE_KEY);
+}
+
+function setAvatarSelection(src){
+    selectedAvatar = src;
+    for(let i of avatarOptions) {
+        i.classList.toggle("selected", i.src === selectedAvatar);
+    }
+}
+
+function showChat(){
+    setupDiv.style.display = "none";
+    chatContainer.style.display = "flex";
+}
+
+function showSetup(){
+    setupDiv.style.display = "flex";
+    chatContainer.style.display = "none";
+}
+
+function updateRoomBadge(){
+    roomBadge.textContent = myRoomCode ? `房间：${myRoomCode}` : "房间：-";
+}
+
+function updateStatus(users){
+    if (!mySessionId) {
+        statusText.textContent = "等待另一位用户上线...";
+        return;
+    }
+
+    const other = users.find((u) => u.sessionId !== mySessionId);
+    if (!other) {
+        statusText.textContent = "等待另一位用户上线...";
+        return;
+    }
+
+    statusText.textContent = other.online ? `${other.user} 已上线` : `${other.user} 暂时离线，30 分钟内不回来将会自动退出`;
+}
+
+function joinRoom(){
+    if (!myUsername || !myAvatar || !mySessionId || hasJoinedRoom) {
+        return;
+    }
+
+    hasJoinedRoom = true;
+    const payload = { user: myUsername, avatar: myAvatar, sessionId: mySessionId };
+    if (myRoomCode) {
+        socket.emit("join-room", { ...payload, roomCode: myRoomCode });
+    } else {
+        socket.emit("create-room", payload);
+    }
+}
+
+function resetCurrentUser({ keepSocket = true } = {}){
+    hasJoinedRoom = false;
+    myUsername = "";
+    myAvatar = "";
+    mySessionId = "";
+    myRoomCode = "";
+    roomUsers = [];
+    messages.innerHTML = "";
+    usernameInput.value = "";
+    roomCodeInput.value = "";
+    setAvatarSelection(avatarOptions[0].src);
+    clearProfile();
+    statusText.textContent = "等待另一位用户上线...";
+    updateRoomBadge();
+    showSetup();
+
+    if (keepSocket && socket.connected) {
+        socket.emit("leave-room", {});
+    }
+}
 
 for(let img of avatarOptions){
     img.addEventListener("click", ()=>{
-        selectedAvatar = img.src;
-        for(let i of avatarOptions) i.classList.remove("selected");
-        img.classList.add("selected");
+        setAvatarSelection(img.src);
     });
+}
+
+const savedProfile = loadProfile();
+if (savedProfile && savedProfile.user && savedProfile.avatar && savedProfile.sessionId) {
+    myUsername = savedProfile.user;
+    myAvatar = savedProfile.avatar;
+    mySessionId = savedProfile.sessionId;
+    myRoomCode = savedProfile.roomCode || "";
+    usernameInput.value = myUsername;
+    roomCodeInput.value = myRoomCode;
+    setAvatarSelection(myAvatar);
+    updateRoomBadge();
+    showChat();
 }
 
 startBtn.addEventListener("click", ()=>{
@@ -84,11 +214,14 @@ startBtn.addEventListener("click", ()=>{
     if(!name){ alert("请输入昵称"); return; }
     myUsername = name;
     myAvatar = selectedAvatar;
+    myRoomCode = roomCodeInput.value.trim().toUpperCase();
+    mySessionId = mySessionId || createSessionId();
+    hasJoinedRoom = false;
+    joinRoom();
+});
 
-    setupDiv.style.display = "none";
-    chatContainer.style.display = "flex";
-
-    socket.emit("join", {user:myUsername}); // 通知服务器加入
+exitBtn.addEventListener("click", ()=>{
+    resetCurrentUser();
 });
 
 const messages = document.getElementById("messages");
@@ -136,7 +269,7 @@ function addMessage(msgObj){
 btn.addEventListener("click", ()=>{
     const msg=input.value.trim();
     if(!msg) return;
-    const msgObj={id:Date.now()+Math.random(), user:myUsername, message:msg, avatar:myAvatar, time:getTimeStr()};
+    const msgObj={id:Date.now()+Math.random(), user:myUsername, message:msg, avatar:myAvatar, time:getTimeStr(), sessionId: mySessionId};
     socket.emit("chat message", msgObj);
     input.value="";
     addMessage(msgObj);
@@ -144,20 +277,56 @@ btn.addEventListener("click", ()=>{
 
 input.addEventListener("keydown",(e)=>{ if(e.key==="Enter") btn.click(); });
 
-socket.on("chat message",(msgObj)=>{ if(msgObj.user===myUsername) return; addMessage(msgObj); });
-
-// 在线状态更新
-socket.on("update users",(users)=>{
-    roomUsers = users;
-    if(users.length===2){
-        const other = users.find(u=>u.user!==myUsername);
-        document.getElementById("online-status").textContent = other ? `${other.user} 已上线` : "等待另一位用户上线...";
-    } else {
-        document.getElementById("online-status").textContent = "等待另一位用户上线...";
+socket.on("connect", ()=> {
+    if (myUsername && myAvatar && mySessionId) {
+        hasJoinedRoom = false;
+        joinRoom();
     }
 });
 
-socket.on("full",(msg)=>{ alert(msg); });
+if (socket.connected && myUsername && myAvatar && mySessionId) {
+    joinRoom();
+}
+
+socket.on("disconnect",()=>{
+    if (myUsername) {
+        statusText.textContent = myRoomCode ? `房间 ${myRoomCode} 连接已断开，30 分钟内可自动恢复` : "连接已断开，30 分钟内可自动恢复";
+    }
+    hasJoinedRoom = false;
+});
+
+socket.on("chat message",(msgObj)=>{ if(msgObj.sessionId && msgObj.sessionId===mySessionId) return; if(msgObj.user===myUsername && !msgObj.sessionId) return; addMessage(msgObj); });
+
+socket.on("room-created", ({ roomCode }) => {
+    myRoomCode = roomCode;
+    roomCodeInput.value = roomCode;
+    updateRoomBadge();
+    saveProfile();
+    showChat();
+    joinRoom();
+});
+
+socket.on("room-state", ({ roomCode, users }) => {
+    if (!roomCode) return;
+    if (!myRoomCode) {
+        myRoomCode = roomCode;
+        roomCodeInput.value = roomCode;
+        updateRoomBadge();
+    }
+    if (myRoomCode !== roomCode) return;
+
+    roomUsers = users;
+    updateStatus(users);
+    saveProfile();
+    showChat();
+    hasJoinedRoom = false;
+});
+
+socket.on("room-error",(msg)=>{
+    alert(msg);
+    hasJoinedRoom = false;
+    showSetup();
+});
 </script>
 </body>
 </html>
