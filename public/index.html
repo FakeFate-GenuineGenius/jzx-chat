@@ -3,32 +3,53 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>两人聊天 - 自定义头像</title>
+<title>芯聊</title>
 <style>
-body { margin:0; font-family:"微软雅黑",Arial,sans-serif; background:#f0f2f5; }
-#setup { padding:20px; background:#fff; display:flex; flex-direction:column; align-items:center; height:100vh; justify-content:center; }
+body { margin:0; font-family:"微软雅黑",Arial,sans-serif; background:linear-gradient(180deg, #b8dcff 0%, #dff0ff 38%, #f7fbff 72%, #ffffff 100%); }
+#setup { padding:20px; background:linear-gradient(180deg, rgba(220,236,255,0.98) 0%, rgba(194,220,255,0.96) 100%); display:flex; flex-direction:column; align-items:center; height:100vh; justify-content:center; }
 #setup input { padding:8px; font-size:16px; margin-bottom:10px; width:200px; }
-#avatar-options img { width:50px; height:50px; border-radius:50%; margin:5px; cursor:pointer; border:2px solid transparent; }
+#avatar-row { display:flex; align-items:center; gap:10px; flex-wrap:nowrap; justify-content:center; margin-bottom:12px; }
+#avatar-options { display:flex; gap:8px; flex-wrap:nowrap; justify-content:center; }
+#avatar-options img { width:56px; height:56px; border-radius:50%; cursor:pointer; border:2px solid transparent; object-fit:cover; background:#e5e7eb; flex:0 0 auto; }
 #avatar-options img.selected { border-color:#1e90ff; }
+#customAvatarTrigger { width:56px; height:56px; border-radius:50%; border:2px dashed #1e90ff; background:#f0f7ff; color:#1e90ff; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:28px; line-height:1; flex:0 0 auto; position:relative; overflow:hidden; }
+#customAvatarTrigger:hover { background:#e6f2ff; }
+#customAvatarTrigger.selected { border-style:solid; }
+#customAvatarInput { display:none; }
+#customAvatarPreview { position:absolute; inset:0; width:100%; height:100%; border-radius:50%; object-fit:cover; display:none; }
+#customAvatarPlus { position:relative; z-index:1; }
 #startBtn { padding:8px 16px; font-size:16px; cursor:pointer; }
 
-.chat-container { display:none; flex-direction:column; height:100vh; }
+.chat-container { display:none; flex-direction:column; height:100vh; position:relative; overflow:hidden; background-color:#0f172a; background-size:cover; background-position:center; background-repeat:no-repeat; }
+.chat-container::before { content:""; position:absolute; inset:0; background:rgba(15,23,42,0.14); }
+#online-status, #messages, .input-box { position:relative; z-index:1; }
 #online-status { padding:10px 12px; background:#0078ff; color:white; font-size:14px; text-align:center; display:flex; align-items:center; justify-content:space-between; gap:12px; }
 #statusMeta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
 #roomBadge { padding:4px 8px; border-radius:999px; background:rgba(255,255,255,0.18); font-size:12px; }
 #exitBtn { padding:7px 12px; background:rgba(255,255,255,0.18); color:white; border:none; border-radius:999px; cursor:pointer; font-size:13px; }
 #exitBtn:hover { background:rgba(255,255,255,0.28); }
+#connectionError { display:none; padding:8px 12px; background:#fee2e2; color:#991b1b; font-size:13px; text-align:center; border-bottom:1px solid rgba(153,27,27,0.15); }
 #messages { flex:1; padding:20px; overflow-y:auto; }
+#messages:empty::before { content:"房间已准备好，等对方上线后就可以聊天了"; display:block; margin-top:24vh; text-align:center; color:rgba(255,255,255,0.82); font-size:16px; letter-spacing:0.5px; }
 .message { display:flex; margin-bottom:15px; align-items:flex-start; }
 .message.other { flex-direction:row; }
 .message.self { flex-direction:row-reverse; }
 .message img { width:40px; height:40px; border-radius:50%; }
+.message-content { display:flex; flex-direction:column; max-width:90%; }
+.message.self .message-content { align-items:flex-end; }
 .message-info { display:flex; font-size:12px; color:#555; margin-bottom:2px; }
 .message-info span { margin-right:5px; }
-.bubble { max-width:90%; padding:10px 15px; border-radius:15px; word-wrap:break-word; position:relative; }
+.message-body { white-space:pre-wrap; word-break:break-word; }
+.message-actions { display:flex; justify-content:flex-end; margin-top:4px; }
+.recallBtn { background:transparent; border:none; color:inherit; font-size:12px; cursor:pointer; padding:0; opacity:0.85; }
+.recallBtn:hover { opacity:1; text-decoration:underline; }
+.message.recalled { justify-content:center; }
+.message.recalled .message-content { max-width:none; align-items:center; }
+.recalled-note { padding:6px 12px; border-radius:999px; background:rgba(255,255,255,0.62); color:#6b7280; font-size:12px; box-shadow:none; }
+.bubble { max-width:90%; padding:10px 15px; border-radius:15px; word-wrap:break-word; position:relative; box-shadow:0 8px 24px rgba(15,23,42,0.18); }
 .bubble.self { background:#1e90ff; color:white; border-bottom-right-radius:0; }
 .bubble.other { background:#fff; color:black; border-bottom-left-radius:0; }
-.input-box { display:flex; padding:10px; background:#f0f0f0; border-top:1px solid #ccc; }
+.input-box { display:flex; padding:10px; background:rgba(240,240,240,0.95); border-top:1px solid rgba(255,255,255,0.18); backdrop-filter:blur(4px); }
 #messageInput { flex:1; padding:10px; font-size:16px; border-radius:5px; border:1px solid #ccc; outline:none; }
 #sendBtn { padding:10px 20px; margin-left:10px; background:#1e90ff; color:white; border:none; border-radius:5px; cursor:pointer; font-size:16px; }
 #sendBtn:hover { background:#187bcd; }
@@ -43,11 +64,18 @@ body { margin:0; font-family:"微软雅黑",Arial,sans-serif; background:#f0f2f5
     <h2>房间密码</h2>
     <input id="roomCodeInput" placeholder="留空自动创建随机房间" />
     <h2>选择头像</h2>
-    <div id="avatar-options">
-        <img src="https://i.pravatar.cc/50?img=1">
-        <img src="https://i.pravatar.cc/50?img=2">
-        <img src="https://i.pravatar.cc/50?img=3">
-        <img src="https://i.pravatar.cc/50?img=4">
+    <div id="avatar-row">
+        <div id="avatar-options">
+            <img src="/images/cat.jpg" alt="示例头像 1">
+            <img src="/images/man.jpg" alt="示例头像 2">
+            <img src="/images/%E4%B9%99%E5%9D%82%E6%9C%89%E5%AE%87.webp" alt="示例头像 3">
+            <img src="/images/%E5%92%8C%E7%94%B0%E7%BA%B1%E9%9B%BE.jpg" alt="示例头像 4">
+        </div>
+        <label id="customAvatarTrigger" for="customAvatarInput" aria-label="上传自定义头像">
+            <img id="customAvatarPreview" alt="自定义头像预览" />
+            <span id="customAvatarPlus">+</span>
+        </label>
+        <input id="customAvatarInput" type="file" accept="image/*" />
     </div>
     <button id="startBtn">开始聊天</button>
 </div>
@@ -61,6 +89,7 @@ body { margin:0; font-family:"微软雅黑",Arial,sans-serif; background:#f0f2f5
             <button id="exitBtn" type="button">主动退出</button>
         </div>
     </div>
+    <div id="connectionError"></div>
     <div id="messages"></div>
     <div class="input-box">
         <input id="messageInput" placeholder="输入消息..." />
@@ -76,6 +105,8 @@ let myAvatar = "";
 let mySessionId = "";
 let myRoomCode = "";
 let roomUsers = [];
+let roomMessages = [];
+let roomMessagesSignature = "";
 let hasJoinedRoom = false;
 const socket = io();
 
@@ -84,11 +115,38 @@ const chatContainer = document.getElementById("chatContainer");
 const usernameInput = document.getElementById("usernameInput");
 const roomCodeInput = document.getElementById("roomCodeInput");
 const avatarOptions = document.getElementById("avatar-options").getElementsByTagName("img");
-let selectedAvatar = avatarOptions[0].src;
+const customAvatarInput = document.getElementById("customAvatarInput");
+const customAvatarPreview = document.getElementById("customAvatarPreview");
+const customAvatarTrigger = document.getElementById("customAvatarTrigger");
+const customAvatarPlus = document.getElementById("customAvatarPlus");
+let selectedAvatar = "";
+const sampleAvatarSources = Array.from(avatarOptions).map((img) => img.src);
+const sampleBackgroundSources = [
+    "/images/fufu.png",
+    "/images/miku.jpg",
+    "/images/sakura.jpg",
+    "/images/sea.jpeg",
+];
+let chatBackgroundApplied = false;
 const startBtn = document.getElementById("startBtn");
 const statusText = document.getElementById("statusText");
 const roomBadge = document.getElementById("roomBadge");
 const exitBtn = document.getElementById("exitBtn");
+const connectionError = document.getElementById("connectionError");
+const RECALL_WINDOW_MS = 2 * 60 * 1000;
+let isPageUnloading = false;
+
+function getRandomBackgroundAvatar(excludeSrc) {
+    const candidates = sampleBackgroundSources.filter((src) => src !== excludeSrc);
+    const pool = candidates.length > 0 ? candidates : sampleBackgroundSources;
+    return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function applyChatBackground() {
+    const backgroundSrc = getRandomBackgroundAvatar(selectedAvatar);
+    chatContainer.style.backgroundImage = `url("${backgroundSrc}")`;
+    chatBackgroundApplied = true;
+}
 
 function createSessionId(){
     if (window.crypto && typeof window.crypto.randomUUID === "function") {
@@ -124,11 +182,23 @@ function setAvatarSelection(src){
     for(let i of avatarOptions) {
         i.classList.toggle("selected", i.src === selectedAvatar);
     }
+    const isCustomAvatar = customAvatarPreview.src && customAvatarPreview.src === selectedAvatar;
+    customAvatarTrigger.classList.toggle("selected", isCustomAvatar);
+    if (isCustomAvatar) {
+        customAvatarPreview.style.display = "block";
+        customAvatarPlus.style.display = "none";
+    } else {
+        customAvatarPreview.style.display = "none";
+        customAvatarPlus.style.display = "block";
+    }
 }
 
 function showChat(){
     setupDiv.style.display = "none";
     chatContainer.style.display = "flex";
+    if (!chatBackgroundApplied) {
+        applyChatBackground();
+    }
 }
 
 function showSetup(){
@@ -136,8 +206,46 @@ function showSetup(){
     chatContainer.style.display = "none";
 }
 
+function showConnectionError(message) {
+    connectionError.textContent = message;
+    connectionError.style.display = "block";
+}
+
+function clearConnectionError() {
+    connectionError.textContent = "";
+    connectionError.style.display = "none";
+}
+
 function updateRoomBadge(){
     roomBadge.textContent = myRoomCode ? `房间：${myRoomCode}` : "房间：-";
+}
+
+function getRoomMessagesSignature(messagesHistory) {
+    return messagesHistory.map((message) => `${message.id}:${message.sessionId}:${message.recalled ? 1 : 0}`).join("|");
+}
+
+function canRecallMessage(msgObj) {
+    if (!msgObj.createdAt) return false;
+    return Date.now() - Number(msgObj.createdAt) <= RECALL_WINDOW_MS;
+}
+
+function renderRoomMessages(messagesHistory) {
+    roomMessages = Array.isArray(messagesHistory) ? messagesHistory : [];
+    roomMessagesSignature = getRoomMessagesSignature(roomMessages);
+    messages.innerHTML = "";
+    roomMessages.forEach((message) => addMessage(message, { scrollToBottom: false }));
+    messages.scrollTop = messages.scrollHeight;
+}
+
+function updateCustomAvatarPreview(src) {
+    customAvatarPreview.src = src;
+    customAvatarPreview.style.display = "block";
+    customAvatarPlus.style.display = "none";
+    for (let i of avatarOptions) {
+        i.classList.remove("selected");
+    }
+    customAvatarTrigger.classList.add("selected");
+    selectedAvatar = src;
 }
 
 function updateStatus(users){
@@ -174,8 +282,12 @@ function resetCurrentUser({ keepSocket = true } = {}){
     myUsername = "";
     myAvatar = "";
     mySessionId = "";
+    chatBackgroundApplied = false;
+    chatContainer.style.backgroundImage = "";
     myRoomCode = "";
     roomUsers = [];
+    roomMessages = [];
+    roomMessagesSignature = "";
     messages.innerHTML = "";
     usernameInput.value = "";
     roomCodeInput.value = "";
@@ -196,6 +308,23 @@ for(let img of avatarOptions){
     });
 }
 
+setAvatarSelection(avatarOptions[0].src);
+
+customAvatarInput.addEventListener("change", ()=>{
+    const file = customAvatarInput.files && customAvatarInput.files[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+        alert("请选择图片文件");
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        updateCustomAvatarPreview(String(reader.result));
+    };
+    reader.readAsDataURL(file);
+});
+
 const savedProfile = loadProfile();
 if (savedProfile && savedProfile.user && savedProfile.avatar && savedProfile.sessionId) {
     myUsername = savedProfile.user;
@@ -204,9 +333,14 @@ if (savedProfile && savedProfile.user && savedProfile.avatar && savedProfile.ses
     myRoomCode = savedProfile.roomCode || "";
     usernameInput.value = myUsername;
     roomCodeInput.value = myRoomCode;
-    setAvatarSelection(myAvatar);
+    if (myAvatar.startsWith("data:image/")) {
+        updateCustomAvatarPreview(myAvatar);
+    } else {
+        setAvatarSelection(myAvatar);
+    }
     updateRoomBadge();
     showChat();
+    applyChatBackground();
 }
 
 startBtn.addEventListener("click", ()=>{
@@ -215,13 +349,22 @@ startBtn.addEventListener("click", ()=>{
     myUsername = name;
     myAvatar = selectedAvatar;
     myRoomCode = roomCodeInput.value.trim().toUpperCase();
+    if (!myAvatar) {
+        myAvatar = avatarOptions[0].src;
+    }
     mySessionId = mySessionId || createSessionId();
+    saveProfile();
     hasJoinedRoom = false;
+    applyChatBackground();
     joinRoom();
 });
 
 exitBtn.addEventListener("click", ()=>{
     resetCurrentUser();
+});
+
+window.addEventListener("beforeunload", () => {
+    isPageUnloading = true;
 });
 
 const messages = document.getElementById("messages");
@@ -233,13 +376,38 @@ function getTimeStr(){
     return d.getHours().toString().padStart(2,'0')+":"+d.getMinutes().toString().padStart(2,'0'); 
 }
 
-function addMessage(msgObj){
+function addMessage(msgObj, options = {}){
+    const isSelf = msgObj.sessionId && msgObj.sessionId === mySessionId;
     const div=document.createElement("div");
     div.classList.add("message");
-    div.classList.add(msgObj.user===myUsername?"self":"other");
+    div.classList.add(isSelf || msgObj.user===myUsername?"self":"other");
+    div.dataset.messageId = msgObj.id || "";
+
+    if (msgObj.recalled) {
+        div.classList.add("recalled");
+
+        const content=document.createElement("div");
+        content.classList.add("message-content");
+
+        const bubble=document.createElement("div");
+        bubble.classList.add("bubble", "recalled-note");
+        bubble.textContent = msgObj.recalledBySessionId === mySessionId ? "你撤回了一条消息" : "对方撤回了一条消息";
+
+        content.appendChild(bubble);
+        div.appendChild(content);
+
+        messages.appendChild(div);
+        if (options.scrollToBottom !== false) {
+            messages.scrollTop=messages.scrollHeight;
+        }
+        return;
+    }
 
     const avatar=document.createElement("img");
-    avatar.src=msgObj.user===myUsername?myAvatar:msgObj.avatar;
+    avatar.src=isSelf ? myAvatar : msgObj.avatar;
+
+    const content=document.createElement("div");
+    content.classList.add("message-content");
 
     const info=document.createElement("div");
     info.classList.add("message-info");
@@ -252,24 +420,57 @@ function addMessage(msgObj){
 
     const bubble=document.createElement("div");
     bubble.classList.add("bubble");
-    bubble.classList.add(msgObj.user===myUsername?"self":"other");
-    bubble.textContent=msgObj.message;
+    bubble.classList.add(isSelf || msgObj.user===myUsername?"self":"other");
 
-    const wrapper=document.createElement("div");
-    wrapper.appendChild(info);
-    wrapper.appendChild(bubble);
+    const body=document.createElement("div");
+    body.classList.add("message-body");
+    body.textContent=msgObj.message;
+
+    bubble.appendChild(info);
+    bubble.appendChild(body);
+
+    if (isSelf && !msgObj.recalled && canRecallMessage(msgObj)) {
+        const actions=document.createElement("div");
+        actions.classList.add("message-actions");
+        const recallBtn=document.createElement("button");
+        recallBtn.type = "button";
+        recallBtn.classList.add("recallBtn");
+        recallBtn.textContent = "撤回";
+        recallBtn.addEventListener("click", (event) => {
+            event.stopPropagation();
+            socket.emit("recall message", {
+                roomCode: myRoomCode,
+                messageId: msgObj.id,
+            }, (response = {}) => {
+                if (!response.ok) {
+                    alert(response.reason || "撤回失败");
+                    return;
+                }
+
+                if (Array.isArray(response.messages)) {
+                    renderRoomMessages(response.messages);
+                }
+            });
+        });
+        actions.appendChild(recallBtn);
+        bubble.appendChild(actions);
+    }
+
+    content.appendChild(bubble);
 
     div.appendChild(avatar);
-    div.appendChild(wrapper);
+    div.appendChild(content);
 
     messages.appendChild(div);
-    messages.scrollTop=messages.scrollHeight;
+    if (options.scrollToBottom !== false) {
+        messages.scrollTop=messages.scrollHeight;
+    }
 }
 
 btn.addEventListener("click", ()=>{
     const msg=input.value.trim();
     if(!msg) return;
-    const msgObj={id:Date.now()+Math.random(), user:myUsername, message:msg, avatar:myAvatar, time:getTimeStr(), sessionId: mySessionId};
+    const msgObj={id:Date.now()+Math.random(), user:myUsername, message:msg, avatar:myAvatar, time:getTimeStr(), sessionId: mySessionId, createdAt: Date.now()};
     socket.emit("chat message", msgObj);
     input.value="";
     addMessage(msgObj);
@@ -278,6 +479,7 @@ btn.addEventListener("click", ()=>{
 input.addEventListener("keydown",(e)=>{ if(e.key==="Enter") btn.click(); });
 
 socket.on("connect", ()=> {
+    clearConnectionError();
     if (myUsername && myAvatar && mySessionId) {
         hasJoinedRoom = false;
         joinRoom();
@@ -288,25 +490,51 @@ if (socket.connected && myUsername && myAvatar && mySessionId) {
     joinRoom();
 }
 
-socket.on("disconnect",()=>{
+socket.on("connect_error", () => {
+    if (myUsername) {
+        showConnectionError("连接异常，正在尝试重连...");
+    }
+});
+
+socket.on("reconnect_error", () => {
+    if (myUsername) {
+        showConnectionError("连接异常，正在尝试重连...");
+    }
+});
+
+socket.on("reconnect_failed", () => {
+    if (myUsername) {
+        showConnectionError("程序异常中断，已无法自动恢复，请刷新页面");
+    }
+});
+
+socket.on("disconnect",(reason)=>{
     if (myUsername) {
         statusText.textContent = myRoomCode ? `房间 ${myRoomCode} 连接已断开，30 分钟内可自动恢复` : "连接已断开，30 分钟内可自动恢复";
+        if (!isPageUnloading && reason !== "io client disconnect") {
+            showConnectionError("程序异常中断，正在尝试重连...");
+        }
     }
     hasJoinedRoom = false;
 });
 
 socket.on("chat message",(msgObj)=>{ if(msgObj.sessionId && msgObj.sessionId===mySessionId) return; if(msgObj.user===myUsername && !msgObj.sessionId) return; addMessage(msgObj); });
 
+socket.on("recall-failed", ({ reason }) => {
+    alert(reason || "撤回失败");
+});
+
 socket.on("room-created", ({ roomCode }) => {
     myRoomCode = roomCode;
     roomCodeInput.value = roomCode;
     updateRoomBadge();
     saveProfile();
+    applyChatBackground();
     showChat();
     joinRoom();
 });
 
-socket.on("room-state", ({ roomCode, users }) => {
+socket.on("room-state", ({ roomCode, users, messages: history = [] }) => {
     if (!roomCode) return;
     if (!myRoomCode) {
         myRoomCode = roomCode;
@@ -318,6 +546,13 @@ socket.on("room-state", ({ roomCode, users }) => {
     roomUsers = users;
     updateStatus(users);
     saveProfile();
+    const nextSignature = getRoomMessagesSignature(history);
+    if (nextSignature !== roomMessagesSignature) {
+        renderRoomMessages(history);
+    }
+    if (!chatBackgroundApplied) {
+        applyChatBackground();
+    }
     showChat();
     hasJoinedRoom = false;
 });

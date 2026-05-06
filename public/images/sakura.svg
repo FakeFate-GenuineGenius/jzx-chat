@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1600" viewBox="0 0 2400 1600">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fff7fb"/>
+      <stop offset="45%" stop-color="#ffeaf4"/>
+      <stop offset="100%" stop-color="#ffd8ea"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="50%" cy="26%" r="26%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.92"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="hill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f6b9d1"/>
+      <stop offset="100%" stop-color="#e994bd"/>
+    </linearGradient>
+    <filter id="blurSoft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8"/>
+    </filter>
+  </defs>
+
+  <rect width="2400" height="1600" fill="url(#sky)"/>
+  <circle cx="1220" cy="420" r="520" fill="url(#sun)"/>
+
+  <g filter="url(#blurSoft)" opacity="0.45">
+    <ellipse cx="520" cy="460" rx="260" ry="110" fill="#ffffff"/>
+    <ellipse cx="1640" cy="350" rx="320" ry="130" fill="#ffffff"/>
+    <ellipse cx="1980" cy="580" rx="240" ry="95" fill="#ffffff"/>
+  </g>
+
+  <path d="M0 1130 C260 1000, 440 1000, 760 1120 C1060 1230, 1320 1270, 1560 1180 C1830 1080, 2050 1030, 2400 1135 L2400 1600 L0 1600 Z" fill="url(#hill)"/>
+  <path d="M0 1200 C260 1120, 470 1110, 760 1210 C1040 1300, 1300 1335, 1600 1260 C1880 1190, 2120 1130, 2400 1220 L2400 1600 L0 1600 Z" fill="#f0a9c8" opacity="0.95"/>
+
+  <g opacity="0.96">
+    <path d="M140 1040 C220 930, 340 860, 470 820" fill="none" stroke="#8d5a3b" stroke-width="16" stroke-linecap="round"/>
+    <path d="M540 1080 C620 955, 740 885, 880 840" fill="none" stroke="#8d5a3b" stroke-width="18" stroke-linecap="round"/>
+    <path d="M1500 1000 C1600 900, 1740 840, 1900 790" fill="none" stroke="#8d5a3b" stroke-width="18" stroke-linecap="round"/>
+    <path d="M2080 1110 C2170 980, 2280 910, 2390 870" fill="none" stroke="#8d5a3b" stroke-width="16" stroke-linecap="round"/>
+  </g>
+
+  <g fill="#fff4fb" opacity="0.98">
+    <ellipse cx="300" cy="930" rx="88" ry="46"/>
+    <ellipse cx="405" cy="890" rx="92" ry="48"/>
+    <ellipse cx="500" cy="935" rx="84" ry="44"/>
+    <ellipse cx="610" cy="885" rx="88" ry="46"/>
+
+    <ellipse cx="740" cy="930" rx="86" ry="45"/>
+    <ellipse cx="850" cy="885" rx="95" ry="50"/>
+    <ellipse cx="960" cy="930" rx="88" ry="46"/>
+
+    <ellipse cx="1650" cy="840" rx="92" ry="48"/>
+    <ellipse cx="1770" cy="790" rx="96" ry="50"/>
+    <ellipse cx="1890" cy="845" rx="88" ry="46"/>
+    <ellipse cx="2010" cy="790" rx="92" ry="48"/>
+    <ellipse cx="2130" cy="845" rx="86" ry="45"/>
+  </g>
+
+  <g fill="#ffd1e6" opacity="0.95">
+    <circle cx="300" cy="930" r="14"/>
+    <circle cx="405" cy="890" r="14"/>
+    <circle cx="500" cy="935" r="14"/>
+    <circle cx="610" cy="885" r="14"/>
+    <circle cx="740" cy="930" r="14"/>
+    <circle cx="850" cy="885" r="14"/>
+    <circle cx="960" cy="930" r="14"/>
+    <circle cx="1650" cy="840" r="15"/>
+    <circle cx="1770" cy="790" r="15"/>
+    <circle cx="1890" cy="845" r="15"/>
+    <circle cx="2010" cy="790" r="15"/>
+    <circle cx="2130" cy="845" r="15"/>
+  </g>
+
+  <g opacity="0.65">
+    <circle cx="1800" cy="270" r="12" fill="#ffffff"/>
+    <circle cx="1880" cy="220" r="8" fill="#ffffff"/>
+    <circle cx="1940" cy="320" r="10" fill="#ffffff"/>
+    <circle cx="640" cy="250" r="8" fill="#ffffff"/>
+    <circle cx="720" cy="330" r="12" fill="#ffffff"/>
+    <circle cx="820" cy="260" r="7" fill="#ffffff"/>
+  </g>
+</svg>

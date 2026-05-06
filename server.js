@@ -2,16 +2,22 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
 const AUTO_LOGOUT_MS = 30 * 60 * 1000;
+const RECALL_WINDOW_MS = 2 * 60 * 1000;
+const LOGS_DIR = path.join(__dirname, "logs");
+
+fs.mkdirSync(LOGS_DIR, { recursive: true });
 
 app.use(express.static("public"));
 
-const rooms = new Map(); // roomCode -> { users: [] }
+const rooms = new Map(); // roomCode -> { users: [], messages: [] }
 
 function generateRoomCode(length = 6) {
     const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -34,12 +40,50 @@ function getPublicUsers(room) {
     return room.users.map(({ disconnectTimer, ...user }) => user);
 }
 
+function getPublicMessages(room) {
+    return room.messages.map(({ ...message }) => message);
+}
+
+function formatLogTime(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${year}年${month}月${day}日 ${hours}:${minutes}`;
+}
+
+function formatLogFileName(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}.log`;
+}
+
+function getChatLogFilePath(date = new Date()) {
+    return path.join(LOGS_DIR, formatLogFileName(date));
+}
+
+function appendChatLogLine(line) {
+    try {
+        fs.appendFileSync(getChatLogFilePath(), `${line}\n`, "utf8");
+    } catch (error) {
+        console.error("写入聊天记录失败:", error);
+    }
+}
+
+function recordChatMessage(roomCode, speakerName, content, { recalled = false } = {}) {
+    const statusText = recalled ? " | 状态:已撤回" : "";
+    appendChatLogLine(`[${formatLogTime()}] | 房间号:${roomCode} | 说话人:${speakerName}${statusText} | 内容:${content}`);
+}
+
 function emitRoomState(roomCode) {
     const room = rooms.get(roomCode);
     if (!room) return;
     io.to(roomCode).emit("room-state", {
         roomCode,
         users: getPublicUsers(room),
+        messages: getPublicMessages(room),
     });
 }
 
@@ -74,7 +118,7 @@ function bindUserToRoom(socket, roomCode, userData, { createIfMissing = false } 
         if (!createIfMissing) {
             return { ok: false, error: "房间不存在，请确认房间密码" };
         }
-        room = { users: [] };
+        room = { users: [], messages: [] };
         rooms.set(roomCode, room);
     }
 
@@ -153,11 +197,79 @@ io.on("connection",(socket)=>{
         const room = rooms.get(roomCode);
         if (!room) return;
 
+        const roomMessage = {
+            id: msgObj.id || `${Date.now()}-${crypto.randomUUID()}`,
+            user: socket.userData?.user || msgObj.user,
+            avatar: socket.userData?.avatar || msgObj.avatar,
+            message: msgObj.message,
+            time: msgObj.time || "",
+            sessionId: socket.userData?.sessionId || msgObj.sessionId,
+            createdAt: msgObj.createdAt || Date.now(),
+        };
+
+        room.messages.push(roomMessage);
+        recordChatMessage(roomCode, roomMessage.user, roomMessage.message);
+
         room.users.forEach((user) => {
             if (user.id !== socket.id && user.online) {
-                io.to(user.id).emit("chat message", msgObj);
+                io.to(user.id).emit("chat message", roomMessage);
             }
         });
+    });
+
+    socket.on("recall message", (payload = {}, callback) => {
+        const roomCode = socket.roomCode || socket.userData?.roomCode || payload.roomCode;
+        const messageId = payload.messageId;
+        const sessionId = socket.userData?.sessionId;
+
+        if (!roomCode || !messageId || !sessionId) {
+            if (typeof callback === "function") {
+                callback({ ok: false, reason: "撤回失败" });
+            }
+            return;
+        }
+
+        const room = rooms.get(roomCode);
+        if (!room) {
+            if (typeof callback === "function") {
+                callback({ ok: false, reason: "房间不存在" });
+            }
+            return;
+        }
+
+        const index = room.messages.findIndex((message) => message.id === messageId);
+        if (index === -1) {
+            if (typeof callback === "function") {
+                callback({ ok: false, reason: "消息不存在或已被撤回" });
+            }
+            return;
+        }
+
+        const targetMessage = room.messages[index];
+        if (targetMessage.sessionId !== sessionId) {
+            if (typeof callback === "function") {
+                callback({ ok: false, reason: "只能撤回自己的消息" });
+            }
+            return;
+        }
+        if (Date.now() - Number(targetMessage.createdAt || 0) > RECALL_WINDOW_MS) {
+            if (typeof callback === "function") {
+                callback({ ok: false, reason: "超过2分钟，无法撤回" });
+            }
+            return;
+        }
+
+        const recalledContent = targetMessage.message;
+        targetMessage.recalled = true;
+        targetMessage.recalledAt = Date.now();
+        targetMessage.recalledBySessionId = sessionId;
+        targetMessage.message = "";
+        recordChatMessage(roomCode, targetMessage.user, recalledContent, { recalled: true });
+        emitRoomState(roomCode);
+        if (typeof callback === "function") {
+            callback({ ok: true, messages: getPublicMessages(room) });
+        }
+        console.log("消息撤回:", roomCode, messageId);
     });
 
     socket.on("disconnect",()=>{
