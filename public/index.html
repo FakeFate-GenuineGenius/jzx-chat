@@ -108,6 +108,7 @@ let roomUsers = [];
 let roomMessages = [];
 let roomMessagesSignature = "";
 let hasJoinedRoom = false;
+let isManualExitPending = false;
 const socket = io();
 
 const setupDiv = document.getElementById("setup");
@@ -268,6 +269,7 @@ function joinRoom(){
         return;
     }
 
+    isManualExitPending = false;
     hasJoinedRoom = true;
     const payload = { user: myUsername, avatar: myAvatar, sessionId: mySessionId };
     if (myRoomCode) {
@@ -278,6 +280,7 @@ function joinRoom(){
 }
 
 function resetCurrentUser({ keepSocket = true } = {}){
+    isManualExitPending = true;
     hasJoinedRoom = false;
     myUsername = "";
     myAvatar = "";
@@ -346,6 +349,7 @@ if (savedProfile && savedProfile.user && savedProfile.avatar && savedProfile.ses
 startBtn.addEventListener("click", ()=>{
     const name = usernameInput.value.trim();
     if(!name){ alert("请输入昵称"); return; }
+    isManualExitPending = false;
     myUsername = name;
     myAvatar = selectedAvatar;
     myRoomCode = roomCodeInput.value.trim().toUpperCase();
@@ -535,6 +539,7 @@ socket.on("room-created", ({ roomCode }) => {
 });
 
 socket.on("room-state", ({ roomCode, users, messages: history = [] }) => {
+    if (isManualExitPending) return;
     if (!roomCode) return;
     if (!myRoomCode) {
         myRoomCode = roomCode;

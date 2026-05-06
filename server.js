@@ -4,6 +4,7 @@ const { Server } = require("socket.io");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 
 const app = express();
 const server = http.createServer(app);
@@ -62,6 +63,22 @@ function formatLogFileName(date = new Date()) {
 
 function getChatLogFilePath(date = new Date()) {
     return path.join(LOGS_DIR, formatLogFileName(date));
+}
+
+function getLocalIPv4Addresses() {
+    const addresses = [];
+    const networkInterfaces = os.networkInterfaces();
+
+    for (const interfaceName of Object.keys(networkInterfaces)) {
+        const entries = networkInterfaces[interfaceName] || [];
+        for (const entry of entries) {
+            if (entry && entry.family === "IPv4" && !entry.internal) {
+                addresses.push(entry.address);
+            }
+        }
+    }
+
+    return addresses;
 }
 
 function appendChatLogLine(line) {
@@ -299,5 +316,12 @@ io.on("connection",(socket)=>{
 
 // server.js
 server.listen(3000, "0.0.0.0", () => {
-    console.log("Server running on http://192.168.11.84:3000");
+    const localUrls = getLocalIPv4Addresses().map((address) => `http://${address}:3000`);
+    console.log("Server running on http://localhost:3000");
+    if (localUrls.length > 0) {
+        console.log("手机或其他设备请访问以下局域网地址:");
+        localUrls.forEach((url) => console.log(url));
+    } else {
+        console.log("未检测到局域网 IPv4 地址，手机需要和电脑在同一网络下才能访问。\n");
+    }
 });
