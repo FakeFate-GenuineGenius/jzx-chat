@@ -14,7 +14,31 @@ const AUTO_LOGOUT_MS = 30 * 60 * 1000;
 const RECALL_WINDOW_MS = 2 * 60 * 1000;
 const LOGS_DIR = path.join(__dirname, "logs");
 
-fs.mkdirSync(LOGS_DIR, { recursive: true });
+// 从外部 JSON 文件动态读取 IP 黑名单
+const BLACKLIST_FILE = path.join(__dirname, "blacklist.json");
+
+function getBlacklistedIps() {
+    try {
+        if (fs.existsSync(BLACKLIST_FILE)) {
+            const data = fs.readFileSync(BLACKLIST_FILE, "utf8");
+            return JSON.parse(data);
+        }
+    } catch (error) {
+        console.error("读取黑名单配置失败:", error);
+    }
+    return [];
+}
+
+// 任何页面的访问级别 IP 检测 (包含静态资源)
+app.use((req, res, next) => {
+    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || "";
+    const ipBlacklist = getBlacklistedIps();
+    
+    if (ipBlacklist.some(ip => clientIp.includes(ip))) {
+        return res.status(403).send("<h2 style='text-align:center;margin-top:50px;'>由于违规行为，您的 IP 已被禁止访问本站点。</h2>");
+    }
+    next();
+});
 
 app.use(express.static("public"));
 
@@ -89,9 +113,14 @@ function appendChatLogLine(line) {
     }
 }
 
+function recordChatEvent(roomCode, user, eventName, ip = "") {
+    const ipStr = ip ? ` (${ip})` : "";
+    appendChatLogLine(`[${formatLogTime()}] [${roomCode}] ${user}${ipStr} ${eventName}`);
+}
+
 function recordChatMessage(roomCode, speakerName, content, { recalled = false } = {}) {
-    const statusText = recalled ? " | 状态:已撤回" : "";
-    appendChatLogLine(`[${formatLogTime()}] | 房间号:${roomCode} | 说话人:${speakerName}${statusText} | 内容:${content}`);
+    const statusText = recalled ? " (已撤回)" : "";
+    appendChatLogLine(`[${formatLogTime()}] [${roomCode}] ${speakerName}: ${content}${statusText}`);
 }
 
 function emitRoomState(roomCode) {
@@ -104,10 +133,33 @@ function emitRoomState(roomCode) {
     });
 }
 
-function deleteRoomIfEmpty(roomCode) {
+function handleRoomDisbandTimer(roomCode) {
     const room = rooms.get(roomCode);
-    if (!room || room.users.length > 0) return;
-    rooms.delete(roomCode);
+    if (!room) return;
+
+    if (room.users.length === 0) {
+        if (room.disbandTimer) clearTimeout(room.disbandTimer);
+        rooms.delete(roomCode);
+        return;
+    }
+
+    if (room.users.length === 1) {
+        if (!room.disbandTimer) {
+            room.disbandTimer = setTimeout(() => {
+                const r = rooms.get(roomCode);
+                if (r && r.users.length <= 1) {
+                    io.to(roomCode).emit("room-destroyed", { reason: "房间已被解散" });
+                    rooms.delete(roomCode);
+                    console.log("房间超时解散:", roomCode);
+                }
+            }, AUTO_LOGOUT_MS);
+        }
+    } else {
+        if (room.disbandTimer) {
+            clearTimeout(room.disbandTimer);
+            room.disbandTimer = null;
+        }
+    }
 }
 
 function removeUser(roomCode, sessionId) {
@@ -122,12 +174,21 @@ function removeUser(roomCode, sessionId) {
         clearTimeout(removed.disconnectTimer);
     }
 
-    deleteRoomIfEmpty(roomCode);
+    handleRoomDisbandTimer(roomCode);
 }
 
 function bindUserToRoom(socket, roomCode, userData, { createIfMissing = false } = {}) {
     if (!userData || !userData.user || !userData.sessionId) {
         return { ok: false, error: "缺少登录信息，请刷新后重新进入" };
+    }
+
+    const clientIp = socket.handshake.address || socket.request.connection.remoteAddress || "";
+    const ipBlacklist = getBlacklistedIps();
+
+    // 检查黑名单 IP
+    if (ipBlacklist.some(ip => clientIp.includes(ip))) {
+        console.log(`[拦截] IP 被封禁的用户尝试加入房间: ${clientIp}`);
+        return { ok: false, error: "您的 IP 存在违规行为，无法进入聊天室" };
     }
 
     let room = rooms.get(roomCode);
@@ -168,6 +229,8 @@ function bindUserToRoom(socket, roomCode, userData, { createIfMissing = false } 
     socket.userData = { ...userData, roomCode };
     socket.roomCode = roomCode;
 
+    handleRoomDisbandTimer(roomCode);
+
     return { ok: true, roomCode, users: getPublicUsers(room) };
 }
 
@@ -183,7 +246,9 @@ io.on("connection",(socket)=>{
 
         socket.emit("room-created", { roomCode: result.roomCode });
         emitRoomState(result.roomCode);
-        console.log("房间创建:", result.roomCode, userData.user);
+        const clientIp = socket.handshake.address || socket.request.connection.remoteAddress || "";
+        console.log(`[${result.roomCode}] ${userData.user} 创建房间 (${clientIp})`);
+        recordChatEvent(result.roomCode, userData.user, "创建房间", clientIp);
     });
 
     socket.on("join-room",(payload)=>{
@@ -194,7 +259,9 @@ io.on("connection",(socket)=>{
         }
 
         emitRoomState(result.roomCode);
-        console.log("用户加入:", result.roomCode, payload.user);
+        const clientIp = socket.handshake.address || socket.request.connection.remoteAddress || "";
+        console.log(`[${result.roomCode}] ${payload.user} 加入房间 (${clientIp})`);
+        recordChatEvent(result.roomCode, payload.user, "加入房间", clientIp);
     });
 
     socket.on("leave-room", (payload = {}) => {
@@ -202,9 +269,11 @@ io.on("connection",(socket)=>{
         const sessionId = payload.sessionId || socket.userData?.sessionId;
         if (!roomCode || !sessionId) return;
 
+        const userName = socket.userData ? socket.userData.user : sessionId;
         removeUser(roomCode, sessionId);
         emitRoomState(roomCode);
-        console.log("用户主动退出:", roomCode, socket.userData ? socket.userData.user : sessionId);
+        console.log(`[${roomCode}] ${userName} 主动退出`);
+        recordChatEvent(roomCode, userName, "主动退出");
     });
 
     socket.on("chat message",(msgObj)=>{
@@ -306,11 +375,14 @@ io.on("connection",(socket)=>{
             const userName = disconnectedUser.user;
             removeUser(roomCode, sessionId);
             emitRoomState(roomCode);
-            console.log("用户超时退出:", roomCode, userName);
+            console.log(`[${roomCode}] ${userName} 超时退出`);
+            recordChatEvent(roomCode, userName, "超时退出");
         }, AUTO_LOGOUT_MS);
 
         emitRoomState(roomCode);
-        console.log("用户离开:", roomCode, socket.userData ? socket.userData.user : socket.id);
+        const userName = socket.userData ? socket.userData.user : socket.id;
+        console.log(`[${roomCode}] ${userName} 断开连接`);
+        recordChatEvent(roomCode, userName, "断开连接");
     });
 });
 
